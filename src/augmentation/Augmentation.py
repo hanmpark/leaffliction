@@ -34,7 +34,7 @@ def scaling(img, scale=1.2):
 
     x0 = max(0, (new_w - w) // 2)
     y0 = max(0, (new_h - h) // 2)
-    return resized[y0 : y0 + h, x0 : x0 + w]
+    return resized[y0:y0 + h, x0:x0 + w]
 
 
 def illumination(img, beta=40):
