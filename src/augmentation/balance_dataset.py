@@ -94,14 +94,18 @@ def _parse_target(value: str, max_count: int) -> int:
     try:
         target = int(value)
     except ValueError as exc:
-        raise ValueError(f"Invalid --target '{value}'. Use 'max' or an integer.") from exc
+        raise ValueError(
+            f"Invalid --target '{value}'. Use 'max' or an integer."
+        ) from exc
     if target < 0:
         raise ValueError("--target must be non-negative.")
     return target
 
 
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Balance image dataset by augmentation.")
+    parser = argparse.ArgumentParser(
+        description="Balance image dataset by augmentation."
+    )
     parser.add_argument("--src", required=True, help="Source dataset root.")
     parser.add_argument(
         "--out",
@@ -126,11 +130,17 @@ def main(argv: List[str] | None = None) -> int:
     aug_script = Path(args.augmentation_script)
 
     if not src.exists() or not src.is_dir():
-        print(f"Error: --src '{src}' is missing or not a directory.", file=sys.stderr)
+        print(
+            f"Error: --src '{src}' is missing or not a directory.",
+            file=sys.stderr,
+        )
         return 1
     if not aug_script.exists() or not aug_script.is_file():
         print(
-            f"Error: --augmentation-script '{aug_script}' is missing or not a file.",
+            (
+                "Error: --augmentation-script "
+                f"'{aug_script}' is missing or not a file."
+            ),
             file=sys.stderr,
         )
         return 1
@@ -140,17 +150,26 @@ def main(argv: List[str] | None = None) -> int:
             shutil.rmtree(out)
         shutil.copytree(src, out)
     except (OSError, shutil.Error) as exc:
-        print(f"Error: failed to prepare output directory '{out}': {exc}", file=sys.stderr)
+        print(
+            f"Error: failed to prepare output directory '{out}': {exc}",
+            file=sys.stderr,
+        )
         return 1
 
     try:
         class_dirs = list_class_dirs(out)
     except OSError as exc:
-        print(f"Error: failed to list class directories: {exc}", file=sys.stderr)
+        print(
+            f"Error: failed to list class directories: {exc}",
+            file=sys.stderr,
+        )
         return 1
 
     if not class_dirs:
-        print("Error: no class directories found under the dataset root.", file=sys.stderr)
+        print(
+            "Error: no class directories found under the dataset root.",
+            file=sys.stderr,
+        )
         return 1
 
     before_counts: Dict[Path, int] = {}
@@ -158,7 +177,10 @@ def main(argv: List[str] | None = None) -> int:
         try:
             before_counts[class_dir] = count_images(class_dir)
         except OSError as exc:
-            print(f"Error: unreadable class directory '{class_dir}': {exc}", file=sys.stderr)
+            print(
+                f"Error: unreadable class directory '{class_dir}': {exc}",
+                file=sys.stderr,
+            )
             return 1
 
     max_count = max(before_counts.values())
@@ -194,8 +216,11 @@ def main(argv: List[str] | None = None) -> int:
         while current < target:
             if not eligible:
                 print(
-                    f"Error: ran out of eligible originals in '{rel}' "
-                    f"before reaching target (current {current}, target {target}).",
+                    (
+                        f"Error: ran out of eligible originals in '{rel}' "
+                        "before reaching target "
+                        f"(current {current}, target {target})."
+                    ),
                     file=sys.stderr,
                 )
                 return 1
@@ -205,14 +230,20 @@ def main(argv: List[str] | None = None) -> int:
                 run_aug(aug_script, chosen)
             except subprocess.CalledProcessError as exc:
                 print(
-                    f"Error: augmentation failed for class '{rel}' with image '{chosen}': {exc}",
+                    (
+                        f"Error: augmentation failed for class '{rel}' "
+                        f"with image '{chosen}': {exc}"
+                    ),
                     file=sys.stderr,
                 )
                 return 1
             after = count_images(class_dir)
             if after <= before:
                 print(
-                    f"Error: augmentation produced no new images for class '{rel}' using '{chosen}'.",
+                    (
+                        "Error: augmentation produced no new images for class "
+                        f"'{rel}' using '{chosen}'."
+                    ),
                     file=sys.stderr,
                 )
                 return 1
@@ -229,7 +260,9 @@ def main(argv: List[str] | None = None) -> int:
     print("Per-class counts (before -> after):")
     for class_dir in class_dirs:
         rel = class_dir.relative_to(out)
-        print(f"{rel}: {before_counts[class_dir]} -> {after_counts[class_dir]}")
+        print(
+            f"{rel}: {before_counts[class_dir]} -> {after_counts[class_dir]}"
+        )
     print(f"Output dataset: {out.resolve()}")
 
     return 0
