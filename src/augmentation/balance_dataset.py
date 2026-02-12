@@ -9,19 +9,22 @@ from typing import Dict, List
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 AUG_OUTPUT_SUFFIXES = (
+    "Flip",
     "Rotate",
+    "Skew",
+    "Shear",
+    "Crop",
+    "Distortion",
+)
+LEGACY_AUG_OUTPUT_SUFFIXES = (
     "Blur",
     "Contrast",
     "Scale",
     "Illumination",
     "Projective",
 )
-AUG_SUFFIXES = tuple(f"_{s}" for s in AUG_OUTPUT_SUFFIXES) + (
-    "_Flip",
-    "_Skew",
-    "_Shear",
-    "_Crop",
-    "_Distortion",
+AUG_SUFFIXES = tuple(
+    f"_{s}" for s in AUG_OUTPUT_SUFFIXES + LEGACY_AUG_OUTPUT_SUFFIXES
 )
 
 
@@ -88,20 +91,6 @@ def run_aug(aug_script: Path, image_path: Path) -> None:
     subprocess.run(cmd, check=True)
 
 
-def _parse_target(value: str, max_count: int) -> int:
-    if value == "max":
-        return max_count
-    try:
-        target = int(value)
-    except ValueError as exc:
-        raise ValueError(
-            f"Invalid --target '{value}'. Use 'max' or an integer."
-        ) from exc
-    if target < 0:
-        raise ValueError("--target must be non-negative.")
-    return target
-
-
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Balance image dataset by augmentation."
@@ -117,12 +106,6 @@ def main(argv: List[str] | None = None) -> int:
         required=True,
         help="Path to augmentation script.",
     )
-    parser.add_argument(
-        "--target",
-        default="max",
-        help="Target count per class: 'max' or an integer.",
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     args = parser.parse_args(argv)
 
     src = Path(args.src)
@@ -183,14 +166,8 @@ def main(argv: List[str] | None = None) -> int:
             )
             return 1
 
-    max_count = max(before_counts.values())
-    try:
-        target = _parse_target(args.target, max_count)
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-    rng = random.Random(args.seed)
+    target = max(before_counts.values())
+    rng = random.Random(42)
 
     for class_dir in class_dirs:
         rel = class_dir.relative_to(out)
