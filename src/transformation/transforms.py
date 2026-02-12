@@ -7,7 +7,9 @@ from plantcv import plantcv as pcv
 
 
 def apply_blur(rgb_img):
-    return pcv.gaussian_blur(img=rgb_img, ksize=(11, 11), sigma_x=0, sigma_y=None)
+    return pcv.gaussian_blur(
+        img=rgb_img, ksize=(11, 11), sigma_x=0, sigma_y=None
+    )
 
 
 def build_mask(rgb_img):
@@ -33,9 +35,9 @@ def build_mask(rgb_img):
 
 
 def largest_contour(mask):
-    contours = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[
-        -2
-    ]
+    contours = cv2.findContours(
+        mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )[-2]
     return max(contours, key=cv2.contourArea) if contours else None
 
 
@@ -182,12 +184,20 @@ def histogram_figure(rgb_img, mask, title="Histogram"):
         for label, (channel, color) in channels.items():
             data = channel[mask_idx].astype(np.float32)
             hist, bins = np.histogram(data, bins=256, range=(0, 255))
-            ax.plot(bins[:-1], (hist / float(total)) * 100.0, color=color, lw=1, label=label)
+            ax.plot(
+                bins[:-1],
+                (hist / float(total)) * 100.0,
+                color=color,
+                lw=1,
+                label=label,
+            )
 
         ax.set_title(title)
         ax.set_xlabel("Pixel intensity")
         ax.set_ylabel("Proportion of pixels (%)")
         ax.set_xlim(0, 255)
-        ax.legend(title="color Channel", bbox_to_anchor=(1.02, 1), loc="upper left")
+        ax.legend(
+            title="color Channel", bbox_to_anchor=(1.02, 1), loc="upper left"
+        )
         fig.tight_layout()
         return fig

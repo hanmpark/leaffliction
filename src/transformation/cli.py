@@ -60,7 +60,8 @@ def build_parser():
         epilog=(
             "Examples:\n"
             "  ./Transformation.py path/to/image.jpg\n"
-            "  ./Transformation.py -src path/to/images_dir -dst path/to/output_dir --mask\n"
+            "  ./Transformation.py -src path/to/images_dir "
+            "-dst path/to/output_dir --mask\n"
         ),
     )
     parser.add_argument("image", nargs="?", help="Path to a single image")
@@ -107,8 +108,10 @@ def _print_metrics(name, contour):
         return
     cx, cy = metrics["centroid"]
     print(
-        f"{name} | area={metrics['area']:.2f} perimeter={metrics['perimeter']:.2f} "
-        f"width={metrics['width']} height={metrics['height']} centroid=({cx},{cy})"
+        f"{name} | area={metrics['area']:.2f} "
+        f"perimeter={metrics['perimeter']:.2f} "
+        f"width={metrics['width']} height={metrics['height']} "
+        f"centroid=({cx},{cy})"
     )
 
 
@@ -183,8 +186,14 @@ def process_directory(src_dir, dst_dir, save_mask=False):
                 plt.close(out["hist_fig"])
 
             if save_mask:
-                save_image(os.path.join(dst_dir, f"{base}_mask.png"), out["mask_rgb"])
-                cv2.imwrite(os.path.join(dst_dir, f"{base}_mask_raw.png"), out["obj_mask"])
+                save_image(
+                    os.path.join(dst_dir, f"{base}_mask.png"),
+                    out["mask_rgb"],
+                )
+                cv2.imwrite(
+                    os.path.join(dst_dir, f"{base}_mask_raw.png"),
+                    out["obj_mask"],
+                )
 
         except Exception as exc:
             print(f"[ERR] {name} | {exc}")
