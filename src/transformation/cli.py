@@ -145,7 +145,7 @@ def process_single(image_path):
         ax.imshow(img)
         ax.set_title(title)
         ax.axis("off")
-    for ax in axes[len(items) :]:
+    for ax in axes[len(items):]:
         ax.axis("off")
     plt.tight_layout()
     plt.show()

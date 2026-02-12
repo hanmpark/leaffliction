@@ -20,7 +20,11 @@ def rotate(img, angle=30):
     h, w = img.shape[:2]
     m = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1)
     return cv2.warpAffine(
-        img, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101
+        img,
+        m,
+        (w, h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT_101,
     )
 
 
@@ -48,7 +52,11 @@ def skew(img, x_ratio=0.12):
     )
     m = cv2.getPerspectiveTransform(src, dst)
     return cv2.warpPerspective(
-        img, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101
+        img,
+        m,
+        (w, h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT_101,
     )
 
 
@@ -58,9 +66,15 @@ def shear(img, shear_factor=0.2):
     cx, cy = w / 2.0, h / 2.0
     tx = cx - (a[0, 0] * cx + a[0, 1] * cy)
     ty = cy - (a[1, 0] * cx + a[1, 1] * cy)
-    m = np.array([[a[0, 0], a[0, 1], tx], [a[1, 0], a[1, 1], ty]], dtype=np.float32)
+    m = np.array(
+        [[a[0, 0], a[0, 1], tx], [a[1, 0], a[1, 1], ty]], dtype=np.float32
+    )
     return cv2.warpAffine(
-        img, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101
+        img,
+        m,
+        (w, h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT_101,
     )
 
 
@@ -72,7 +86,7 @@ def crop(img, ratio=0.9):
     new_h = max(1, int(h * ratio))
     x0 = max(0, (w - new_w) // 2)
     y0 = max(0, (h - new_h) // 2)
-    cropped = img[y0 : y0 + new_h, x0 : x0 + new_w]
+    cropped = img[y0:y0 + new_h, x0:x0 + new_w]
     return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
