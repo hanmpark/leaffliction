@@ -34,15 +34,28 @@ def is_augmented(path: Path) -> bool:
     return any(stem.endswith(suffix) for suffix in AUG_SUFFIXES)
 
 
+def has_images(directory: Path) -> bool:
+    """Return True if the directory has at least one supported image file."""
+    for p in directory.iterdir():
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+            return True
+    return False
+
+
 def list_class_dirs(root: Path) -> List[Path]:
-    """Return all class directories under <root>/<Plant>/<Class>."""
+    """Support <root>/<plant>/<class>, <root>/<class>, and class-only root."""
     class_dirs: List[Path] = []
-    for plant_dir in root.iterdir():
-        if not plant_dir.is_dir():
+    top_dirs = sorted([p for p in root.iterdir() if p.is_dir()])
+    if not top_dirs and has_images(root):
+        return [root]
+
+    for top_dir in top_dirs:
+        nested = sorted([p for p in top_dir.iterdir() if p.is_dir()])
+        if nested:
+            class_dirs.extend(nested)
             continue
-        for class_dir in plant_dir.iterdir():
-            if class_dir.is_dir():
-                class_dirs.append(class_dir)
+        if has_images(top_dir):
+            class_dirs.append(top_dir)
     return sorted(class_dirs)
 
 
@@ -95,7 +108,14 @@ def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Balance image dataset by augmentation."
     )
-    parser.add_argument("--src", required=True, help="Source dataset root.")
+    parser.add_argument(
+        "--src",
+        required=True,
+        help=(
+            "Source dataset directory. Supports <plant>/<class>, <class>, "
+            "or a single class directory."
+        ),
+    )
     parser.add_argument(
         "--out",
         default="augmented_directory",
@@ -150,7 +170,7 @@ def main(argv: List[str] | None = None) -> int:
 
     if not class_dirs:
         print(
-            "Error: no class directories found under the dataset root.",
+            "Error: no class directories found under --src.",
             file=sys.stderr,
         )
         return 1

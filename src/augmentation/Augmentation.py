@@ -1,10 +1,29 @@
 #!/usr/bin/env python3
 
-import sys
+import argparse
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+AUG_OUTPUT_SUFFIXES = (
+    "Flip",
+    "Rotate",
+    "Skew",
+    "Shear",
+    "Crop",
+    "Distortion",
+)
+AUG_SUFFIXES = tuple(f"_{suffix}" for suffix in AUG_OUTPUT_SUFFIXES)
+
+
+def is_image(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in IMAGE_EXTS
+
+
+def is_augmented(path: Path) -> bool:
+    return any(path.stem.endswith(suffix) for suffix in AUG_SUFFIXES)
 
 
 def save(img, path, suffix):
@@ -108,17 +127,11 @@ def distortion(img, k1=-0.2):
     )
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: ./Augmentation.py image_path")
-        return 1
-
-    path = Path(sys.argv[1])
+def augment_image(path: Path) -> bool:
     img = cv2.imread(str(path))
-
     if img is None:
-        print("Error: cannot load image")
-        return 1
+        print(f"Error: cannot load image '{path}'")
+        return False
 
     save(flip(img), path, "Flip")
     save(rotate(img), path, "Rotate")
@@ -126,6 +139,98 @@ def main() -> int:
     save(shear(img), path, "Shear")
     save(crop(img), path, "Crop")
     save(distortion(img), path, "Distortion")
+    return True
+
+
+def get_subdirs(path: Path) -> list[Path]:
+    return sorted([p for p in path.iterdir() if p.is_dir()])
+
+
+def list_original_images(directory: Path) -> list[Path]:
+    return sorted(
+        [
+            p
+            for p in directory.iterdir()
+            if is_image(p) and not is_augmented(p)
+        ]
+    )
+
+
+def list_class_dirs(root: Path) -> list[Path]:
+    """Support <root>/<plant>/<class>, <root>/<class>, and class-only root."""
+    top_dirs = get_subdirs(root)
+    if not top_dirs and list_original_images(root):
+        return [root]
+
+    class_dirs: list[Path] = []
+    for top_dir in top_dirs:
+        nested = get_subdirs(top_dir)
+        if nested:
+            class_dirs.extend(nested)
+            continue
+        if list_original_images(top_dir):
+            class_dirs.append(top_dir)
+
+    return sorted(class_dirs)
+
+
+def list_images_from_input(path: Path) -> list[Path]:
+    if path.is_file():
+        if not is_image(path):
+            return []
+        if is_augmented(path):
+            return []
+        return [path]
+
+    class_dirs = list_class_dirs(path)
+    if class_dirs:
+        images: list[Path] = []
+        for class_dir in class_dirs:
+            images.extend(list_original_images(class_dir))
+        return images
+
+    return list_original_images(path)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Apply geometric augmentations to one image, or to all original "
+            "images found under a directory."
+        )
+    )
+    parser.add_argument(
+        "input_path",
+        type=Path,
+        help=(
+            "Image path, dataset root, or dataset subfolder. "
+            "Supported directory layouts: <plant>/<class> or <class>."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    path = args.input_path
+
+    if not path.exists():
+        print(f"Error: path does not exist: '{path}'")
+        return 1
+
+    images = list_images_from_input(path)
+    if not images:
+        print(
+            "Error: no original images found. "
+            "Provide an image or a directory containing images.",
+        )
+        return 1
+
+    for image_path in images:
+        if not augment_image(image_path):
+            return 1
+
+    print(f"[ok] Augmented {len(images)} image(s).")
     return 0
 
 
