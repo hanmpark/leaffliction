@@ -148,16 +148,7 @@ def process_single(image_path):
     for ax in axes[len(items):]:
         ax.axis("off")
     plt.tight_layout()
-    backend = plt.get_backend().lower()
-    if backend.endswith("agg"):
-        preview_path = Path(image_path).with_name(f"{base}_overview.png")
-        fig.savefig(preview_path, dpi=150, bbox_inches="tight")
-        print(
-            f"[INFO] Non-interactive backend '{backend}': "
-            f"saved preview to {preview_path}"
-        )
-    else:
-        plt.show()
+    plt.show()
     plt.close(fig)
 
 
