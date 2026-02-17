@@ -1,5 +1,4 @@
 matplotlib>=3.8,<4.0
-PyGObject
 numpy>=1.24
 scikit-learn>=1.3
 opencv-python
