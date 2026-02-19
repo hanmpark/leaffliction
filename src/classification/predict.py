@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 try:
     from .features import (
@@ -35,7 +34,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "model_dir",
         type=Path,
-        help="Directory containing model.pkl/classes.json/config.json.",
+        help="Directory containing model.pkl (classes.json is optional fallback).",
     )
     parser.add_argument(
         "image_path",
@@ -49,12 +48,45 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def parse_idx_to_class(classes_payload: dict[str, Any]) -> list[str]:
-    idx_to_class = classes_payload["idx_to_class"]
-    return [
-        str(idx_to_class[str(i)])
-        for i in range(len(idx_to_class))
-    ]
+def parse_idx_to_class(idx_to_class: dict[str, Any]) -> list[str]:
+    if not isinstance(idx_to_class, dict) or not idx_to_class:
+        raise ValueError("empty or invalid idx_to_class mapping")
+
+    classes: list[str] = []
+    for i in range(len(idx_to_class)):
+        if str(i) in idx_to_class:
+            classes.append(str(idx_to_class[str(i)]))
+            continue
+        if i in idx_to_class:
+            classes.append(str(idx_to_class[i]))
+            continue
+        raise ValueError(f"missing class index {i}")
+    return classes
+
+
+def load_idx_to_class(model_payload: dict[str, Any], model_dir: Path) -> list[str]:
+    idx_to_class = model_payload.get("idx_to_class")
+    if isinstance(idx_to_class, dict):
+        try:
+            return parse_idx_to_class(idx_to_class)
+        except ValueError:
+            pass
+
+    classes_path = model_dir / "classes.json"
+    if not classes_path.exists():
+        raise SystemExit(
+            "Error: model.pkl missing 'idx_to_class' and classes.json not found."
+        )
+
+    classes_payload = load_json(classes_path)
+    idx_to_class = classes_payload.get("idx_to_class")
+    if not isinstance(idx_to_class, dict):
+        raise SystemExit("Error: classes.json missing 'idx_to_class'.")
+
+    try:
+        return parse_idx_to_class(idx_to_class)
+    except ValueError as exc:
+        raise SystemExit(f"Error: invalid class mapping: {exc}") from exc
 
 
 def show_images(
@@ -91,24 +123,15 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"Error: image path is not a file: {args.image_path}")
 
     model_path = args.model_dir / "model.pkl"
-    classes_path = args.model_dir / "classes.json"
-    config_path = args.model_dir / "config.json"
+    if not model_path.exists():
+        raise SystemExit(f"Error: required artifact missing: {model_path}")
 
-    for required_path in (model_path, classes_path, config_path):
-        if not required_path.exists():
-            raise SystemExit(
-                f"Error: required artifact missing: {required_path}"
-            )
-
-    classes_payload = load_json(classes_path)
-    load_json(config_path)
-
-    idx_to_class = parse_idx_to_class(classes_payload)
     with model_path.open("rb") as f:
         model_payload = pickle.load(f)
 
     estimator = model_payload.get("estimator")
     feature_config = model_payload.get("feature_config")
+    idx_to_class = load_idx_to_class(model_payload, args.model_dir)
     if estimator is None:
         raise SystemExit("Error: model.pkl missing 'estimator'.")
     if not isinstance(feature_config, dict):
@@ -122,22 +145,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     X = feature_vector.reshape(1, -1)
-    probs = estimator.predict_proba(X)[0]
-
-    probs = np.asarray(probs, dtype=np.float64)
-    if probs.ndim != 1 or probs.size != len(idx_to_class):
+    predicted_idx = int(estimator.predict(X)[0])
+    if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
         raise SystemExit(
-            "Error: prediction output shape does not match class count."
+            "Error: prediction output class index is out of range."
         )
-
-    top_k = min(3, len(idx_to_class))
-    top_indices = np.argsort(probs)[::-1][:top_k]
-    top_index_list = [int(idx) for idx in top_indices]
     print_prediction_report(
         image_path=args.image_path,
         idx_to_class=idx_to_class,
-        probs=probs,
-        top_indices=top_index_list,
+        predicted_idx=predicted_idx,
     )
 
     original_img = read_image_rgb(args.image_path)

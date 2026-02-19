@@ -115,7 +115,6 @@ def print_train_intro(
     img_size: int,
     seed: int,
     val_split: float,
-    svm_c: float,
 ) -> None:
     """Print a styled train-session intro block."""
     color_enabled = supports_color()
@@ -132,7 +131,6 @@ def print_train_intro(
         f"{style('Validation split:', BOLD, enabled=color_enabled)} "
         f"{val_split:.2f}"
     )
-    print(f"{style('SVC C:', BOLD, enabled=color_enabled)} {svm_c}")
     print()
 
 
@@ -182,17 +180,10 @@ def print_train_outro(
 def print_prediction_report(
     image_path: Path,
     idx_to_class: Sequence[str],
-    probs: np.ndarray,
-    top_indices: Sequence[int],
+    predicted_idx: int,
 ) -> None:
     """Print a styled prediction summary block."""
-    best_idx = int(top_indices[0])
-    confidence = float(probs[best_idx]) * 100.0
-    top_labels = [
-        format_disease_label(idx_to_class[int(idx)])
-        for idx in top_indices
-    ]
-    width = max(len(name) for name in top_labels)
+    predicted_label = format_disease_label(idx_to_class[int(predicted_idx)])
     color_enabled = supports_color()
 
     banner = "=" * 30
@@ -208,46 +199,7 @@ def print_prediction_report(
         FG_GREEN,
         enabled=color_enabled,
     )
-    confidence_key = style("Confidence:", BOLD, enabled=color_enabled)
-
-    predicted_value = style(
-        top_labels[0],
-        BOLD,
-        FG_GREEN,
-        enabled=color_enabled,
-    )
-    confidence_value = style(
-        f"{confidence:.2f}%",
-        BOLD,
-        FG_GREEN,
-        enabled=color_enabled,
-    )
+    predicted_value = style(predicted_label, BOLD, FG_GREEN, enabled=color_enabled)
 
     print(f"{image_path_key} {image_path}")
     print(f"{predicted_key} {predicted_value}")
-    print(f"{confidence_key} {confidence_value}")
-    print()
-
-    print(style("Top probabilities:", BOLD, FG_MAGENTA, enabled=color_enabled))
-    arrow = style("->", FG_BLUE, enabled=color_enabled)
-
-    for rank, (label, idx) in enumerate(zip(top_labels, top_indices), start=1):
-        prob = float(probs[int(idx)]) * 100.0
-        label_text = f"{label:<{width}}"
-        if rank == 1:
-            label_text = style(
-                label_text,
-                BOLD,
-                FG_GREEN,
-                enabled=color_enabled,
-            )
-            prob_text = style(
-                f"{prob:.2f}%",
-                BOLD,
-                FG_GREEN,
-                enabled=color_enabled,
-            )
-        else:
-            label_text = style(label_text, FG_CYAN, enabled=color_enabled)
-            prob_text = style(f"{prob:.2f}%", FG_YELLOW, enabled=color_enabled)
-        print(f"  {label_text} {arrow} {prob_text}")
