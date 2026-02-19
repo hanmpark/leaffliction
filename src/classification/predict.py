@@ -6,30 +6,45 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+import random
 from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 try:
     from .features import (
+        IMAGE_EXTENSIONS,
         build_hog_descriptor,
         extract_feature_vector_from_path,
         read_image_rgb,
     )
-    from .console_output import print_prediction_report
+    from .console_output import (
+        format_disease_label,
+        print_prediction_report,
+        print_progress,
+    )
 except ImportError:  # pragma: no cover
     from features import (
+        IMAGE_EXTENSIONS,
         build_hog_descriptor,
         extract_feature_vector_from_path,
         read_image_rgb,
     )
-    from console_output import print_prediction_report
+    from console_output import (
+        format_disease_label,
+        print_prediction_report,
+        print_progress,
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Predict a leaf disease class from one image."
+        description=(
+            "Predict leaf disease from one image, or from a directory of "
+            "images (recursive depth: 5)."
+        )
     )
     parser.add_argument(
         "model_dir",
@@ -37,9 +52,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Directory containing model.pkl (classes.json is optional fallback).",
     )
     parser.add_argument(
-        "image_path",
+        "input_path",
         type=Path,
-        help="Path to input image.",
+        help="Path to one image, or a directory of images.",
+    )
+    parser.add_argument(
+        "--max",
+        type=int,
+        default=None,
+        dest="max_images",
+        help=(
+            "Maximum number of random unique images to predict in directory "
+            "mode (example: --max=100)."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -92,7 +117,6 @@ def load_idx_to_class(model_payload: dict[str, Any], model_dir: Path) -> list[st
 def show_images(
     original_img: np.ndarray,
     transformed_img: np.ndarray,
-    image_path: Path,
 ) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     axes[0].imshow(original_img)
@@ -108,6 +132,166 @@ def show_images(
     plt.close(fig)
 
 
+def collect_images_from_directory(root: Path, max_depth: int = 5) -> list[Path]:
+    """Collect supported images recursively up to max directory depth."""
+    images: list[Path] = []
+    stack: list[tuple[Path, int]] = [(root, 0)]
+
+    while stack:
+        current_dir, depth = stack.pop()
+        try:
+            entries = sorted(current_dir.iterdir())
+        except OSError as exc:
+            raise SystemExit(
+                f"Error: failed to read directory '{current_dir}': {exc}"
+            ) from exc
+
+        for entry in entries:
+            if entry.is_dir():
+                if depth < max_depth:
+                    stack.append((entry, depth + 1))
+                continue
+            if not entry.is_file():
+                continue
+            if entry.suffix.lower() in IMAGE_EXTENSIONS:
+                images.append(entry)
+
+    return images
+
+
+def predict_single_image(
+    estimator: Any,
+    feature_config: dict[str, Any],
+    idx_to_class: list[str],
+    image_path: Path,
+) -> int:
+    """Predict one image and show side-by-side visualization."""
+    hog_descriptor = build_hog_descriptor(feature_config)
+    feature_vector, transformed_img = extract_feature_vector_from_path(
+        image_path,
+        feature_config,
+        hog_descriptor=hog_descriptor,
+    )
+
+    X = feature_vector.reshape(1, -1)
+    predicted_idx = int(estimator.predict(X)[0])
+    if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
+        raise SystemExit("Error: prediction output class index is out of range.")
+    print_prediction_report(
+        image_path=image_path,
+        idx_to_class=idx_to_class,
+        predicted_idx=predicted_idx,
+    )
+
+    original_img = read_image_rgb(image_path)
+    show_images(
+        original_img=original_img,
+        transformed_img=transformed_img,
+    )
+    return 0
+
+
+def predict_directory(
+    estimator: Any,
+    idx_to_class: list[str],
+    feature_config: dict[str, Any],
+    input_dir: Path,
+    max_images: int | None,
+) -> int:
+    """Predict a random unique subset of images from a directory tree."""
+    if max_images is not None and max_images <= 0:
+        raise SystemExit("Error: --max must be greater than 0.")
+
+    all_images = collect_images_from_directory(input_dir, max_depth=5)
+    total_found = len(all_images)
+    if total_found == 0:
+        raise SystemExit(
+            f"Error: no supported images found in '{input_dir}' (depth <= 5)."
+        )
+
+    print(f"[info] Found {total_found} image(s) in directory mode.")
+    selected = list(all_images)
+    random.shuffle(selected)
+    if max_images is not None:
+        selected = selected[:max_images]
+    total_selected = len(selected)
+    print(f"[info] Predicting {total_selected} image(s).")
+
+    hog_descriptor = build_hog_descriptor(feature_config)
+    success_entries: list[tuple[Path, str]] = []
+    failure_entries: list[tuple[Path, str, str]] = []
+
+    def expected_label_from_path(path: Path) -> str:
+        return format_disease_label(path.parent.name)
+
+    for index, image_path in enumerate(selected, start=1):
+        expected_label = expected_label_from_path(image_path)
+        try:
+            feature_vector, _ = extract_feature_vector_from_path(
+                image_path,
+                feature_config,
+                hog_descriptor=hog_descriptor,
+            )
+            X = feature_vector.reshape(1, -1)
+            predicted_idx = int(estimator.predict(X)[0])
+            if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
+                raise ValueError("predicted class index out of range")
+            predicted_label = format_disease_label(idx_to_class[predicted_idx])
+
+            if predicted_label == expected_label:
+                success_entries.append((image_path, predicted_label))
+            else:
+                failure_entries.append(
+                    (image_path, predicted_label, expected_label)
+                )
+        except Exception as exc:  # pragma: no cover
+            failure_entries.append(
+                (image_path, f"<error: {exc}>", expected_label)
+            )
+            print(
+                f"\n[warn] Skipping '{image_path}': {exc}",
+                flush=True,
+            )
+
+        success_rate = (len(success_entries) / index) * 100.0 if index else 0.0
+        print_progress(
+            "Batch prediction",
+            index,
+            total_selected,
+            suffix=f"success={success_rate:6.2f}%",
+        )
+
+    success_count = len(success_entries)
+    failure_count = len(failure_entries)
+    success_rate = (success_count / total_selected) * 100.0
+
+    summary_path = Path("prediction_summary.txt")
+    lines: list[str] = [
+        "Prediction Summary",
+        f"Input directory: {input_dir.resolve()}",
+        f"Files processed: {total_selected}",
+        f"Success: {success_count}",
+        f"Failed: {failure_count}",
+        "",
+        "Failed files",
+        "FilePath\tPrediction\tCorrect Output",
+    ]
+    for file_path, prediction, correct_output in failure_entries:
+        lines.append(f"{file_path}\t{prediction}\t{correct_output}")
+    lines.extend(["", "Succeeded files", "FilePath\tPrediction"])
+    for file_path, prediction in success_entries:
+        lines.append(f"{file_path}\t{prediction}")
+    summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    print("Directory prediction summary:")
+    print(f"  processed: {total_selected}")
+    print(f"  success: {success_count}")
+    print(f"  failed: {failure_count}")
+    print(f"  success percentage: {success_rate:.2f}%")
+    print(f"  details file: {summary_path.resolve()}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -117,10 +301,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             f"Error: model path is not a directory: {args.model_dir}"
         )
-    if not args.image_path.exists():
-        raise SystemExit(f"Error: image not found: {args.image_path}")
-    if not args.image_path.is_file():
-        raise SystemExit(f"Error: image path is not a file: {args.image_path}")
+    if not args.input_path.exists():
+        raise SystemExit(f"Error: input path not found: {args.input_path}")
 
     model_path = args.model_dir / "model.pkl"
     if not model_path.exists():
@@ -137,33 +319,23 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(feature_config, dict):
         raise SystemExit("Error: model.pkl missing 'feature_config'.")
 
-    hog_descriptor = build_hog_descriptor(feature_config)
-    feature_vector, transformed_img = extract_feature_vector_from_path(
-        args.image_path,
-        feature_config,
-        hog_descriptor=hog_descriptor,
-    )
-
-    X = feature_vector.reshape(1, -1)
-    predicted_idx = int(estimator.predict(X)[0])
-    if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
-        raise SystemExit(
-            "Error: prediction output class index is out of range."
+    if args.input_path.is_file():
+        return predict_single_image(
+            estimator=estimator,
+            feature_config=feature_config,
+            idx_to_class=idx_to_class,
+            image_path=args.input_path,
         )
-    print_prediction_report(
-        image_path=args.image_path,
-        idx_to_class=idx_to_class,
-        predicted_idx=predicted_idx,
-    )
+    if args.input_path.is_dir():
+        return predict_directory(
+            estimator=estimator,
+            idx_to_class=idx_to_class,
+            feature_config=feature_config,
+            input_dir=args.input_path,
+            max_images=args.max_images,
+        )
 
-    original_img = read_image_rgb(args.image_path)
-    show_images(
-        original_img=original_img,
-        transformed_img=transformed_img,
-        image_path=args.image_path,
-    )
-
-    return 0
+    raise SystemExit(f"Error: unsupported input path: {args.input_path}")
 
 
 if __name__ == "__main__":

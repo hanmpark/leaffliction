@@ -22,8 +22,7 @@ FG_BLUE = "\033[34m"
 FG_MAGENTA = "\033[35m"
 
 
-SPINNER_FRAMES = "|/-\\"
-
+SPINNER_FRAMES = "🕛🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚"
 
 def supports_color() -> bool:
     """Return True when ANSI color output is supported."""
@@ -54,6 +53,7 @@ def print_progress(
     current: int,
     total: int,
     width: int = 28,
+    suffix: str = "",
 ) -> None:
     """Render a one-line progress bar."""
     if total <= 0:
@@ -62,6 +62,8 @@ def print_progress(
     filled = int(round(width * ratio))
     bar = "#" * filled + "-" * (width - filled)
     line = f"{label}: [{bar}] {current}/{total} ({ratio * 100.0:6.2f}%)"
+    if suffix:
+        line = f"{line} {suffix}"
     end = "\n" if current >= total else "\r"
     print(line, end=end, flush=True)
 
@@ -90,11 +92,11 @@ def run_with_spinner(
 
     start = time.monotonic()
     frame_index = 0
-    while not done.wait(0.2):
+    while not done.wait(0.1):
         elapsed = time.monotonic() - start
         frame = SPINNER_FRAMES[frame_index % len(SPINNER_FRAMES)]
         print(
-            f"{label} {frame} {elapsed:5.1f}s",
+            f"{label} {frame}{elapsed:5.1f}s",
             end="\r",
             flush=True,
         )

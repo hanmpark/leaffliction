@@ -98,10 +98,71 @@ def has_missing_aug_outputs(original: Path) -> bool:
 def run_aug(aug_script: Path, image_path: Path) -> None:
     """Run augmentation script on the given image."""
     if aug_script.suffix.lower() == ".py":
-        cmd = [sys.executable, str(aug_script), str(image_path)]
+        cmd = [sys.executable, str(aug_script), str(image_path), "--quiet"]
     else:
         cmd = [str(aug_script), str(image_path)]
     subprocess.run(cmd, check=True)
+
+
+def format_progress_line(
+    label: str,
+    current: int,
+    target: int,
+    label_width: int,
+    width: int = 28,
+) -> str:
+    """Format one class progress bar line."""
+    ratio = (current / target) if target > 0 else 0.0
+    bounded_ratio = min(1.0, max(0.0, ratio))
+    filled = int(round(width * bounded_ratio))
+    bar = "#" * filled + "-" * (width - filled)
+    padded_label = label.ljust(label_width)
+    return f"{padded_label}: [{bar}] {current}/{target} ({ratio * 100.0:6.2f}%)"
+
+
+def print_progress_bars(
+    class_dirs: List[Path],
+    out: Path,
+    current_counts: Dict[Path, int],
+    target: int,
+    rendered_lines: int,
+) -> int:
+    """Render or refresh all class progress bars in-place when possible."""
+    ordered_dirs = sorted(
+        class_dirs,
+        key=lambda p: (
+            -(
+                (current_counts[p] / target)
+                if target > 0
+                else 0.0
+            ),
+            str(p.relative_to(out)).replace("\\", "/"),
+        ),
+    )
+    labels = [
+        str(class_dir.relative_to(out)).replace("\\", "/")
+        for class_dir in ordered_dirs
+    ]
+    label_width = max((len(label) for label in labels), default=0)
+    lines = [
+        format_progress_line(
+            label,
+            current_counts[class_dir],
+            target,
+            label_width=label_width,
+        )
+        for class_dir, label in zip(ordered_dirs, labels)
+    ]
+
+    if sys.stdout.isatty():
+        if rendered_lines:
+            print(f"\033[{rendered_lines}F", end="")
+        for line in lines:
+            print(f"{line}\033[K")
+    else:
+        for line in lines:
+            print(line)
+    return len(lines)
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -187,7 +248,26 @@ def main(argv: List[str] | None = None) -> int:
             return 1
 
     target = max(before_counts.values())
+    class_dirs = sorted(
+        class_dirs,
+        key=lambda p: (
+            -(
+                (before_counts[p] / target)
+                if target > 0
+                else 0.0
+            ),
+            str(p.relative_to(out)).replace("\\", "/"),
+        ),
+    )
     rng = random.Random(42)
+    current_counts: Dict[Path, int] = dict(before_counts)
+    rendered_lines = print_progress_bars(
+        class_dirs,
+        out,
+        current_counts,
+        target,
+        rendered_lines=0,
+    )
 
     for class_dir in class_dirs:
         rel = class_dir.relative_to(out)
@@ -248,6 +328,14 @@ def main(argv: List[str] | None = None) -> int:
                 if chosen in eligible:
                     eligible.remove(chosen)
             current = after
+            current_counts[class_dir] = current
+            rendered_lines = print_progress_bars(
+                class_dirs,
+                out,
+                current_counts,
+                target,
+                rendered_lines=rendered_lines,
+            )
 
     after_counts: Dict[Path, int] = {}
     for class_dir in class_dirs:

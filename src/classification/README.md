@@ -45,7 +45,9 @@ python3 src/classification/train.py <dataset_dir>
    - `src/augmentation/Augmentation.py`
 4. Collects samples + class mapping from the augmented directory.
 5. Performs stratified split (`val_split = 0.2` by default).
-6. Writes split manifest to `artifacts/dataset_split_paths.json`.
+6. Materializes split directories:
+   - `artifacts/augmented_directory/train_data/allFiles/...`
+   - `artifacts/augmented_directory/validation_data/allFiles/...`
 7. Extracts features for all samples:
    - HSV 3D color histogram
    - HOG descriptor
@@ -68,7 +70,6 @@ python3 src/classification/train.py <dataset_dir>
 ### Generated Artifacts
 
 - `artifacts/model/model.pkl`
-- `artifacts/dataset_split_paths.json`
 - `artifacts/augmented_directory/...`
 - `artifacts/learnings.zip`
 
@@ -82,19 +83,14 @@ Saved object is a dictionary with keys:
 - `idx_to_class`: mapping index (string key) -> class name
 - `training_summary`: training metadata (accuracy, split counts, confusion matrix, etc.)
 
-## Split Manifest (`dataset_split_paths.json`)
+## Split Directories
 
-Structure:
+Training writes two browsable split folders inside the augmented dataset:
 
-```json
-{
-  "relative_to": "/absolute/path/to/artifacts/augmented_directory",
-  "train_set": ["class_a/img1.jpg", "..."],
-  "validation_set": ["class_b/img9.jpg", "..."]
-}
-```
+- `artifacts/augmented_directory/train_data/allFiles`
+- `artifacts/augmented_directory/validation_data/allFiles`
 
-Paths are relative to `relative_to`.
+Files are copied with their relative class path preserved under `allFiles`.
 
 ## Prediction Program (`predict.py`)
 
@@ -103,7 +99,7 @@ Paths are relative to `relative_to`.
 From repository root:
 
 ```bash
-python3 src/classification/predict.py <model_dir> <image_path>
+python3 src/classification/predict.py <model_dir> <input_path> [--max=100]
 ```
 
 Example:
@@ -112,14 +108,28 @@ Example:
 python3 src/classification/predict.py artifacts/model test_images/Unit_test2/Grape_healthy.JPG
 ```
 
+Directory mode example:
+
+```bash
+python3 src/classification/predict.py artifacts/model ./images --max=100
+```
+
 ### Prediction Flow
 
-1. Validates `<model_dir>` and `<image_path>`.
+1. Validates `<model_dir>` and `<input_path>`.
 2. Loads `model.pkl`.
 3. Reads class mapping from `model.pkl` (`idx_to_class`).
    - Fallback for older artifacts: `classes.json` in model dir.
-4. Recomputes features on input image using saved `feature_config`.
-5. Runs `estimator.predict(...)` and prints predicted class.
-6. Displays:
-   - original image
-   - resized model-input image
+4. If `<input_path>` is an image:
+   - recomputes features using saved `feature_config`
+   - runs `estimator.predict(...)`
+   - prints predicted class and displays original + resized image
+5. If `<input_path>` is a directory:
+   - recursively discovers images up to 5 directory levels deep
+   - shuffles all discovered images, samples unique images once (`--max` optional)
+   - shows a live progress bar (`predicted/total`)
+   - shows running success percentage
+   - writes detailed report to `prediction_summary.txt`:
+     - summary (input dir, processed, success, failed)
+     - failed files (`FilePath`, `Prediction`, `Correct Output`)
+     - succeeded files (`FilePath`, `Prediction`)

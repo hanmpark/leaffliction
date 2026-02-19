@@ -207,6 +207,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Supported directory layouts: <plant>/<class> or <class>."
         ),
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress success logs.",
+    )
     return parser.parse_args(argv)
 
 
@@ -230,7 +235,8 @@ def main(argv: list[str] | None = None) -> int:
         if not augment_image(image_path):
             return 1
 
-    print(f"[ok] Augmented {len(images)} image(s).")
+    if not args.quiet:
+        print(f"[ok] Augmented {len(images)} image(s).")
     return 0
 
 

@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import pickle
 import random
 import shlex
 import shutil
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -36,6 +34,7 @@ try:
         print_train_intro,
         print_train_metrics,
         print_train_outro,
+        run_with_spinner,
     )
 except ImportError:  # pragma: no cover
     from features import (
@@ -49,6 +48,7 @@ except ImportError:  # pragma: no cover
         print_train_intro,
         print_train_metrics,
         print_train_outro,
+        run_with_spinner,
     )
 
 
@@ -178,13 +178,13 @@ def train_svc_model(
     y_val: np.ndarray,
 ) -> tuple[Pipeline, float, float, np.ndarray]:
     num_classes = int(np.unique(y_train).size)
-    print("Training svm...")
-    start = time.monotonic()
-    model.fit(X_train, y_train)
-    elapsed = time.monotonic() - start
-    print(f"Training svm done in {elapsed:.1f}s")
-    train_pred = model.predict(X_train)
-    val_pred = model.predict(X_val)
+    run_with_spinner("Training svm", model.fit, X_train, y_train)
+    train_pred = np.asarray(
+        run_with_spinner("Predicting train split", model.predict, X_train)
+    )
+    val_pred = np.asarray(
+        run_with_spinner("Predicting validation split", model.predict, X_val)
+    )
     train_acc = float(accuracy_score(y_train, train_pred))
     val_acc = float(accuracy_score(y_val, val_pred))
     print_train_metrics(train_acc, val_acc)
@@ -250,44 +250,31 @@ def save_artifacts(
         pickle.dump(model_payload, f)
 
 
-def collect_relative_paths(
-    samples: list[tuple[Path, int]],
-    indices: list[int],
-    root_dir: Path,
-) -> list[str]:
-    rel_paths: list[str] = []
-    for idx in sorted(indices):
-        image_path, _ = samples[idx]
-        rel_paths.append(image_path.relative_to(root_dir).as_posix())
-    return rel_paths
-
-
-def save_dataset_split_paths(
-    out_dir: Path,
+def materialize_dataset_split_dirs(
     augmented_dir: Path,
     samples: list[tuple[Path, int]],
     train_indices: list[int],
     val_indices: list[int],
-) -> Path:
-    split_payload = {
-        "relative_to": str(augmented_dir.resolve()),
-        "train_set": collect_relative_paths(
-            samples=samples,
-            indices=train_indices,
-            root_dir=augmented_dir,
-        ),
-        "validation_set": collect_relative_paths(
-            samples=samples,
-            indices=val_indices,
-            root_dir=augmented_dir,
-        ),
-    }
-    split_json_path = out_dir / "dataset_split_paths.json"
-    split_json_path.write_text(
-        json.dumps(split_payload, indent=2),
-        encoding="utf-8",
-    )
-    return split_json_path
+) -> tuple[Path, Path]:
+    train_root = augmented_dir / "train_data" / "allFiles"
+    val_root = augmented_dir / "validation_data" / "allFiles"
+
+    for split_root in (train_root, val_root):
+        if split_root.exists():
+            shutil.rmtree(split_root)
+        split_root.mkdir(parents=True, exist_ok=True)
+
+    def _copy_indices(indices: list[int], destination_root: Path) -> None:
+        for idx in sorted(indices):
+            image_path, _ = samples[idx]
+            rel = image_path.relative_to(augmented_dir)
+            dst = destination_root / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(image_path, dst)
+
+    _copy_indices(train_indices, train_root)
+    _copy_indices(val_indices, val_root)
+    return train_root, val_root
 
 
 def make_zip(out_dir: Path) -> Path:
@@ -363,14 +350,6 @@ def main(argv: list[str] | None = None) -> int:
         val_split,
         seed,
     )
-    split_json_path = save_dataset_split_paths(
-        out_dir=out_dir,
-        augmented_dir=augmented_dir,
-        samples=samples,
-        train_indices=train_indices,
-        val_indices=val_indices,
-    )
-
     print_dataset_summary(
         num_classes=len(classes),
         total_samples=len(samples),
@@ -407,6 +386,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     best_name = "svm"
+    train_split_dir, val_split_dir = materialize_dataset_split_dirs(
+        augmented_dir=augmented_dir,
+        samples=samples,
+        train_indices=train_indices,
+        val_indices=val_indices,
+    )
 
     # Save model metadata needed for reproducible prediction.
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -423,7 +408,8 @@ def main(argv: list[str] | None = None) -> int:
         "feature_dimension": feature_dim,
         "train_sample_count": int(X_train.shape[0]),
         "val_sample_count": int(X_val.shape[0]),
-        "dataset_split_paths_json": str(split_json_path.resolve()),
+        "train_split_dir": str(train_split_dir.resolve()),
+        "validation_split_dir": str(val_split_dir.resolve()),
         "best_confusion_matrix": best_cm.tolist(),
         "hyperparameters": {
             "kernel": "rbf",
