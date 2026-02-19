@@ -49,7 +49,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "model_dir",
         type=Path,
-        help="Directory containing model.pkl (classes.json is optional fallback).",
+        help=(
+            "Directory containing model.pkl "
+            "(classes.json is optional fallback)."
+        ),
     )
     parser.add_argument(
         "input_path",
@@ -89,7 +92,10 @@ def parse_idx_to_class(idx_to_class: dict[str, Any]) -> list[str]:
     return classes
 
 
-def load_idx_to_class(model_payload: dict[str, Any], model_dir: Path) -> list[str]:
+def load_idx_to_class(
+    model_payload: dict[str, Any],
+    model_dir: Path,
+) -> list[str]:
     idx_to_class = model_payload.get("idx_to_class")
     if isinstance(idx_to_class, dict):
         try:
@@ -100,7 +106,8 @@ def load_idx_to_class(model_payload: dict[str, Any], model_dir: Path) -> list[st
     classes_path = model_dir / "classes.json"
     if not classes_path.exists():
         raise SystemExit(
-            "Error: model.pkl missing 'idx_to_class' and classes.json not found."
+            "Error: model.pkl missing 'idx_to_class' "
+            "and classes.json not found."
         )
 
     classes_payload = load_json(classes_path)
@@ -132,7 +139,10 @@ def show_images(
     plt.close(fig)
 
 
-def collect_images_from_directory(root: Path, max_depth: int = 5) -> list[Path]:
+def collect_images_from_directory(
+    root: Path,
+    max_depth: int = 5,
+) -> list[Path]:
     """Collect supported images recursively up to max directory depth."""
     images: list[Path] = []
     stack: list[tuple[Path, int]] = [(root, 0)]
@@ -176,7 +186,9 @@ def predict_single_image(
     X = feature_vector.reshape(1, -1)
     predicted_idx = int(estimator.predict(X)[0])
     if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
-        raise SystemExit("Error: prediction output class index is out of range.")
+        raise SystemExit(
+            "Error: prediction output class index is out of range."
+        )
     print_prediction_report(
         image_path=image_path,
         idx_to_class=idx_to_class,
@@ -274,9 +286,15 @@ def predict_directory(
         dtype=np.int64,
     )
     for expected_label, predicted_label in evaluated_pairs:
-        if expected_label not in label_to_idx or predicted_label not in label_to_idx:
+        if (
+            expected_label not in label_to_idx
+            or predicted_label not in label_to_idx
+        ):
             continue
-        confusion[label_to_idx[expected_label], label_to_idx[predicted_label]] += 1
+        confusion[
+            label_to_idx[expected_label],
+            label_to_idx[predicted_label],
+        ] += 1
 
     summary_path = Path("prediction_summary.txt")
     lines: list[str] = [

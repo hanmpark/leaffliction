@@ -24,6 +24,7 @@ FG_MAGENTA = "\033[35m"
 
 SPINNER_FRAMES = "🕛🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚"
 
+
 def supports_color() -> bool:
     """Return True when ANSI color output is supported."""
     if os.environ.get("NO_COLOR"):
@@ -216,7 +217,12 @@ def print_prediction_report(
         FG_GREEN,
         enabled=color_enabled,
     )
-    predicted_value = style(predicted_label, BOLD, FG_GREEN, enabled=color_enabled)
+    predicted_value = style(
+        predicted_label,
+        BOLD,
+        FG_GREEN,
+        enabled=color_enabled,
+    )
 
     print(f"{image_path_key} {image_path}")
     print(f"{predicted_key} {predicted_value}")

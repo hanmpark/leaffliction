@@ -8,7 +8,8 @@ Supported layouts:
 - Two levels: input_dir/<plant>/<class>/*.jpg
 - One level: input_dir/<class>/*.jpg
 
-For one-level layouts, plants are inferred from class names (prefix before "_").
+For one-level layouts, plants are inferred from class names
+(prefix before "_").
 """
 
 import argparse
@@ -43,8 +44,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "dataset_dir",
         type=Path,
         help=(
-            "Input directory. Can be a dataset root, a single plant directory, "
-            "or a flat set of class directories."
+            "Input directory. Can be a dataset root, "
+            "a single plant directory, or a flat set "
+            "of class directories."
         ),
     )
     parser.add_argument(
@@ -83,9 +85,15 @@ def simplify_class_label(class_name: str, plant_name: str) -> str:
     return class_name
 
 
-def input_looks_like_single_plant(input_dir: Path, class_dirs: list[Path]) -> bool:
+def input_looks_like_single_plant(
+    input_dir: Path,
+    class_dirs: list[Path],
+) -> bool:
     prefix = f"{input_dir.name}_"
-    return bool(class_dirs) and all(class_dir.name.startswith(prefix) for class_dir in class_dirs)
+    return bool(class_dirs) and all(
+        class_dir.name.startswith(prefix)
+        for class_dir in class_dirs
+    )
 
 
 def build_charts_for_plant(
@@ -147,7 +155,10 @@ def build_charts_for_plant(
     print(f"[ok] {plant_name}: saved {pie_path} and {bar_path}")
 
 
-def group_classes_by_plant(input_dir: Path, top_dirs: list[Path]) -> dict[str, list[Path]]:
+def group_classes_by_plant(
+    input_dir: Path,
+    top_dirs: list[Path],
+) -> dict[str, list[Path]]:
     plant_to_classes: dict[str, list[Path]] = {}
     flat_class_dirs: list[Path] = []
 
@@ -169,12 +180,18 @@ def group_classes_by_plant(input_dir: Path, top_dirs: list[Path]) -> dict[str, l
     if not flat_class_dirs:
         return plant_to_classes
 
-    if not plant_to_classes and input_looks_like_single_plant(input_dir, flat_class_dirs):
+    if (
+        not plant_to_classes
+        and input_looks_like_single_plant(input_dir, flat_class_dirs)
+    ):
         plant_to_classes[input_dir.name] = list(flat_class_dirs)
         return plant_to_classes
 
     for class_dir in flat_class_dirs:
-        plant_name = infer_plant_from_class_name(class_dir.name, input_dir.name)
+        plant_name = infer_plant_from_class_name(
+            class_dir.name,
+            input_dir.name,
+        )
         plant_to_classes.setdefault(plant_name, []).append(class_dir)
 
     return plant_to_classes

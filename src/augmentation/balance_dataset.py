@@ -117,7 +117,10 @@ def format_progress_line(
     filled = int(round(width * bounded_ratio))
     bar = "#" * filled + "-" * (width - filled)
     padded_label = label.ljust(label_width)
-    return f"{padded_label}: [{bar}] {current}/{target} ({ratio * 100.0:6.2f}%)"
+    return (
+        f"{padded_label}: [{bar}] {current}/{target} "
+        f"({ratio * 100.0:6.2f}%)"
+    )
 
 
 def print_progress_bars(

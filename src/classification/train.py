@@ -196,7 +196,10 @@ def list_split_source_images(dataset_dir: Path) -> list[Path]:
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             continue
         rel = path.relative_to(dataset_dir)
-        if rel.parts and rel.parts[0] in {TRAINING_DIRNAME, VALIDATION_DIRNAME}:
+        if (
+            rel.parts
+            and rel.parts[0] in {TRAINING_DIRNAME, VALIDATION_DIRNAME}
+        ):
             continue
         images.append(path)
     return images
@@ -290,14 +293,20 @@ def choose_unbalanced_action() -> str:
         "Enter 1 or 2: "
     )
     if not sys.stdin.isatty():
-        print("[warn] Non-interactive mode detected. Continuing without balancing.")
+        print(
+            "[warn] Non-interactive mode detected. "
+            "Continuing without balancing."
+        )
         return "train"
 
     while True:
         try:
             choice = input(prompt).strip()
         except EOFError:
-            print("[warn] No interactive input available. Continuing without balancing.")
+            print(
+                "[warn] No interactive input available. "
+                "Continuing without balancing."
+            )
             return "train"
         if choice == "1":
             return "balance"
@@ -402,7 +411,10 @@ def create_split_dirs(
         if not directory.is_dir():
             continue
         rel = directory.relative_to(dataset_dir)
-        if rel.parts and rel.parts[0] in {TRAINING_DIRNAME, VALIDATION_DIRNAME}:
+        if (
+            rel.parts
+            and rel.parts[0] in {TRAINING_DIRNAME, VALIDATION_DIRNAME}
+        ):
             continue
         try:
             directory.rmdir()
@@ -519,7 +531,10 @@ def choose_existing_model_action() -> str:
         try:
             choice = input(prompt).strip()
         except EOFError:
-            print("[warn] No interactive input available. Using existing model.")
+            print(
+                "[warn] No interactive input available. "
+                "Using existing model."
+            )
             return "use"
         if choice == "1":
             return "retrain"
@@ -572,7 +587,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
 
-    working_dataset_dir = prepare_working_dataset(args.dataset_dir, args.output)
+    working_dataset_dir = prepare_working_dataset(
+        args.dataset_dir,
+        args.output,
+    )
 
     # Print a run header and keep training deterministic.
     print_train_intro(
@@ -594,10 +612,16 @@ def main(argv: list[str] | None = None) -> int:
         if not is_balanced(class_counts, BALANCE_TOLERANCE):
             if args.auto_balance is True:
                 action = "balance"
-                print("[info] Auto-balance enabled: balancing dataset in-place.")
+                print(
+                    "[info] Auto-balance enabled: "
+                    "balancing dataset in-place."
+                )
             elif args.auto_balance is False:
                 action = "train"
-                print("[info] Auto-balance disabled: training without balancing.")
+                print(
+                    "[info] Auto-balance disabled: "
+                    "training without balancing."
+                )
             else:
                 action = choose_unbalanced_action()
             if action == "balance":
