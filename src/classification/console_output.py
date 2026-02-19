@@ -92,11 +92,11 @@ def run_with_spinner(
 
     start = time.monotonic()
     frame_index = 0
-    while not done.wait(0.1):
+    while not done.wait(0.083):
         elapsed = time.monotonic() - start
         frame = SPINNER_FRAMES[frame_index % len(SPINNER_FRAMES)]
         print(
-            f"{label} {frame}{elapsed:5.1f}s",
+            f"{label} {frame} {elapsed:5.1f}s",
             end="\r",
             flush=True,
         )
@@ -116,7 +116,7 @@ def print_train_intro(
     out_dir: Path,
     img_size: int,
     seed: int,
-    val_split: float,
+    val_split: float | None,
 ) -> None:
     """Print a styled train-session intro block."""
     color_enabled = supports_color()
@@ -129,10 +129,16 @@ def print_train_intro(
     print(f"{style('Output:', BOLD, enabled=color_enabled)} {out_dir}")
     print(f"{style('Image size:', BOLD, enabled=color_enabled)} {img_size}")
     print(f"{style('Seed:', BOLD, enabled=color_enabled)} {seed}")
-    print(
-        f"{style('Validation split:', BOLD, enabled=color_enabled)} "
-        f"{val_split:.2f}"
-    )
+    if val_split is None:
+        print(
+            f"{style('Validation split:', BOLD, enabled=color_enabled)} "
+            "disabled"
+        )
+    else:
+        print(
+            f"{style('Validation split:', BOLD, enabled=color_enabled)} "
+            f"{val_split:.2f}"
+        )
     print()
 
 
@@ -163,20 +169,29 @@ def print_train_metrics(train_acc: float, val_acc: float) -> None:
 
 def print_train_outro(
     model_name: str,
-    best_val_accuracy: float,
-    confusion_matrix: np.ndarray,
+    best_val_accuracy: float | None,
+    confusion_matrix: np.ndarray | None,
     model_dir: Path,
-    zip_path: Path,
+    zip_path: Path | None,
 ) -> None:
     """Print final training summary and artifact paths."""
     color_enabled = supports_color()
     print(style("Training Result", BOLD, FG_CYAN, enabled=color_enabled))
     print(f"  selected model: {model_name}")
-    print(f"  best validation accuracy: {best_val_accuracy * 100.0:.2f}%")
-    print("  confusion matrix:")
-    print(confusion_matrix)
+    if best_val_accuracy is None:
+        print("  validation accuracy: skipped in training run")
+    else:
+        print(f"  best validation accuracy: {best_val_accuracy * 100.0:.2f}%")
+    if confusion_matrix is None:
+        print("  confusion matrix: skipped in training run")
+    else:
+        print("  confusion matrix:")
+        print(confusion_matrix)
     print(f"  model artifacts: {model_dir}")
-    print(f"  zip path: {zip_path}")
+    if zip_path is None:
+        print("  zip path: not generated (use --generate-zip)")
+    else:
+        print(f"  zip path: {zip_path}")
 
 
 def print_prediction_report(

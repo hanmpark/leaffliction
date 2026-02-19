@@ -11,12 +11,16 @@ This folder contains the classical (non-deep-learning) image classification pipe
 
 At a high level:
 
-1. Build a balanced augmented dataset in `artifacts/augmented_directory`.
-2. Split samples into train/validation sets.
-3. Extract handcrafted features from every image.
-4. Train `Pipeline(StandardScaler -> SVC(kernel="rbf"))`.
-5. Save artifacts (model + metadata) in `artifacts`.
-6. Run prediction for a single image from `artifacts/model/model.pkl`.
+1. Analyze input dataset balance per class.
+2. If unbalanced (class gap > 6), prompt:
+   - balance in-place then train, or
+   - train directly without balancing.
+3. Detect `training_data` / `validation_data` split folders in input data.
+4. If missing, prompt for validation split ratio (default `0.2`) and create them.
+5. Extract handcrafted features from training split images.
+6. Train `Pipeline(StandardScaler -> SVC(kernel="rbf"))`.
+7. Save artifacts (model + metadata) in `artifacts`.
+8. Run prediction from `artifacts/model/model.pkl`.
 
 ## Dataset Assumptions
 
@@ -31,47 +35,59 @@ At a high level:
 From repository root:
 
 ```bash
-python3 src/classification/train.py <dataset_dir>
+python3 src/classification/train.py <dataset_dir> [--output=<path>] [--generate-zip] [--val-split=0.2] [--auto-balance=true]
 ```
 
 ### Training Flow
 
 1. Validates `<dataset_dir>`.
-2. Recreates output folders:
-   - `artifacts/model`
-   - `artifacts/augmented_directory`
-3. Runs augmentation/balancing script:
-   - `src/augmentation/balance_dataset.py`
+2. If `artifacts/model/model.pkl` already exists, prompts:
+   - erase and retrain, or
+   - use existing model (skip retraining).
+3. If `--output=<path>` is set, duplicates `<dataset_dir>` into that path and
+   uses the copied dataset as the working/training dataset.
+4. Analyzes per-class counts on working dataset.
+5. If class imbalance exceeds `+/- 6`, asks user whether to balance in-place.
+   - Non-interactive override: `--auto-balance=true|false`
+6. Optional in-place balancing uses:
+   - `src/augmentation/balance_dataset.py --in-place`
    - `src/augmentation/Augmentation.py`
-4. Collects samples + class mapping from the augmented directory.
-5. Performs stratified split (`val_split = 0.2` by default).
-6. Materializes split directories:
-   - `artifacts/augmented_directory/train_data/allFiles/...`
-   - `artifacts/augmented_directory/validation_data/allFiles/...`
-7. Extracts features for all samples:
+7. Detects split folders in working dataset:
+   - `<dataset_dir>/training_data`
+   - `<dataset_dir>/validation_data`
+8. If split folders are missing, warns and creates them from a validation
+   split ratio:
+   - prompted value (default `0.2`), or
+   - `--val-split=<float>` if provided.
+   - source images are moved into `training_data/` and `validation_data/`.
+9. Recreates `artifacts/model`.
+10. Extracts features for training split samples:
    - HSV 3D color histogram
    - HOG descriptor
    - Texture (GLCM statistics + Laplacian/gray stats)
-8. Trains `SVC(kernel="rbf")` inside a sklearn `Pipeline` with `StandardScaler`.
-9. Evaluates train/validation accuracy + confusion matrix.
-10. Saves `artifacts/model/model.pkl`.
-11. Builds `artifacts/learnings.zip` containing:
-    - `model/`
-    - `augmented_directory/`
+11. Trains `SVC(kernel="rbf")` inside a sklearn `Pipeline` with `StandardScaler`.
+12. Saves `artifacts/model/model.pkl`.
+13. Optionally builds `artifacts/learnings.zip` when `--generate-zip` is used.
 
 ### Main Defaults
 
 - Output dir: `./artifacts`
 - Image size: `128x128`
 - Seed: `42`
-- Validation split: `0.2`
+- Balance tolerance: `+/- 6` images per class
+- Default validation split: `0.2` (used when creating split folders)
 - Classifier: `SVC(kernel="rbf")`
+
+### Automation Flags
+
+- `--val-split=<float>`: set split ratio directly (`0 < value < 1`), no prompt.
+- `--auto-balance=true`: if dataset is unbalanced, balance in-place automatically.
+- `--auto-balance=false`: if dataset is unbalanced, skip balancing automatically.
 
 ### Generated Artifacts
 
 - `artifacts/model/model.pkl`
-- `artifacts/augmented_directory/...`
-- `artifacts/learnings.zip`
+- `artifacts/learnings.zip` (only with `--generate-zip`)
 
 ## Model Payload (`model.pkl`)
 
@@ -81,16 +97,12 @@ Saved object is a dictionary with keys:
 - `feature_config`: feature extraction config used for training
 - `class_to_idx`: mapping class name -> integer index
 - `idx_to_class`: mapping index (string key) -> class name
-- `training_summary`: training metadata (accuracy, split counts, confusion matrix, etc.)
+- `training_summary`: training metadata (input dataset, feature size, and config)
 
-## Split Directories
+When `--generate-zip` is enabled, `learnings.zip` contains:
 
-Training writes two browsable split folders inside the augmented dataset:
-
-- `artifacts/augmented_directory/train_data/allFiles`
-- `artifacts/augmented_directory/validation_data/allFiles`
-
-Files are copied with their relative class path preserved under `allFiles`.
+- `model/` (trained model artifacts)
+- `input_images/` (supported input images from `<dataset_dir>`)
 
 ## Prediction Program (`predict.py`)
 
@@ -129,7 +141,9 @@ python3 src/classification/predict.py artifacts/model ./images --max=100
    - shuffles all discovered images, samples unique images once (`--max` optional)
    - shows a live progress bar (`predicted/total`)
    - shows running success percentage
+   - prints a confusion matrix (rows=expected labels, cols=predicted labels)
    - writes detailed report to `prediction_summary.txt`:
      - summary (input dir, processed, success, failed)
+     - confusion matrix
      - failed files (`FilePath`, `Prediction`, `Correct Output`)
      - succeeded files (`FilePath`, `Prediction`)

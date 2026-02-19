@@ -183,6 +183,12 @@ def main(argv: List[str] | None = None) -> int:
         help="Output dataset directory (default: augmented_directory).",
     )
     parser.add_argument(
+        "--in-place",
+        action="store_true",
+        dest="in_place",
+        help="Balance the source dataset in-place (no output copy).",
+    )
+    parser.add_argument(
         "--augmentation-script",
         required=True,
         help="Path to augmentation script.",
@@ -209,16 +215,19 @@ def main(argv: List[str] | None = None) -> int:
         )
         return 1
 
-    try:
-        if out.exists():
-            shutil.rmtree(out)
-        shutil.copytree(src, out)
-    except (OSError, shutil.Error) as exc:
-        print(
-            f"Error: failed to prepare output directory '{out}': {exc}",
-            file=sys.stderr,
-        )
-        return 1
+    if args.in_place:
+        out = src
+    else:
+        try:
+            if out.exists():
+                shutil.rmtree(out)
+            shutil.copytree(src, out)
+        except (OSError, shutil.Error) as exc:
+            print(
+                f"Error: failed to prepare output directory '{out}': {exc}",
+                file=sys.stderr,
+            )
+            return 1
 
     try:
         class_dirs = list_class_dirs(out)
@@ -348,7 +357,10 @@ def main(argv: List[str] | None = None) -> int:
         print(
             f"{rel}: {before_counts[class_dir]} -> {after_counts[class_dir]}"
         )
-    print(f"Output dataset: {out.resolve()}")
+    if args.in_place:
+        print(f"Output dataset: {out.resolve()} (in-place)")
+    else:
+        print(f"Output dataset: {out.resolve()}")
 
     return 0
 

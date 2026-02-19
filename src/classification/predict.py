@@ -220,6 +220,7 @@ def predict_directory(
     hog_descriptor = build_hog_descriptor(feature_config)
     success_entries: list[tuple[Path, str]] = []
     failure_entries: list[tuple[Path, str, str]] = []
+    evaluated_pairs: list[tuple[str, str]] = []
 
     def expected_label_from_path(path: Path) -> str:
         return format_disease_label(path.parent.name)
@@ -237,6 +238,7 @@ def predict_directory(
             if predicted_idx < 0 or predicted_idx >= len(idx_to_class):
                 raise ValueError("predicted class index out of range")
             predicted_label = format_disease_label(idx_to_class[predicted_idx])
+            evaluated_pairs.append((expected_label, predicted_label))
 
             if predicted_label == expected_label:
                 success_entries.append((image_path, predicted_label))
@@ -264,6 +266,17 @@ def predict_directory(
     success_count = len(success_entries)
     failure_count = len(failure_entries)
     success_rate = (success_count / total_selected) * 100.0
+    known_labels = [format_disease_label(label) for label in idx_to_class]
+    confusion_labels = list(dict.fromkeys(known_labels))
+    label_to_idx = {label: i for i, label in enumerate(confusion_labels)}
+    confusion = np.zeros(
+        (len(confusion_labels), len(confusion_labels)),
+        dtype=np.int64,
+    )
+    for expected_label, predicted_label in evaluated_pairs:
+        if expected_label not in label_to_idx or predicted_label not in label_to_idx:
+            continue
+        confusion[label_to_idx[expected_label], label_to_idx[predicted_label]] += 1
 
     summary_path = Path("prediction_summary.txt")
     lines: list[str] = [
@@ -272,6 +285,12 @@ def predict_directory(
         f"Files processed: {total_selected}",
         f"Success: {success_count}",
         f"Failed: {failure_count}",
+        f"Evaluated for confusion matrix: {len(evaluated_pairs)}",
+        "",
+        "Confusion Matrix",
+        "Rows=Expected, Columns=Predicted",
+        f"Labels: {', '.join(confusion_labels)}",
+        np.array2string(confusion),
         "",
         "Failed files",
         "FilePath\tPrediction\tCorrect Output",
@@ -288,6 +307,9 @@ def predict_directory(
     print(f"  success: {success_count}")
     print(f"  failed: {failure_count}")
     print(f"  success percentage: {success_rate:.2f}%")
+    print("  confusion matrix (rows=expected, cols=predicted):")
+    print(f"    labels: {confusion_labels}")
+    print(confusion)
     print(f"  details file: {summary_path.resolve()}")
     return 0
 

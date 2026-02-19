@@ -210,3 +210,5 @@ dataset/
 augmented_directory/
 
 artifacts/
+
+prediction_summary.txt
