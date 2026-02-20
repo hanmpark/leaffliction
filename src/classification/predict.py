@@ -124,6 +124,7 @@ def load_idx_to_class(
 def show_images(
     original_img: np.ndarray,
     transformed_img: np.ndarray,
+    predicted_label: str,
 ) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     axes[0].imshow(original_img)
@@ -134,7 +135,8 @@ def show_images(
     axes[1].set_title("Model Input (Resized)")
     axes[1].axis("off")
 
-    plt.tight_layout()
+    fig.suptitle(f"Predicted class: {predicted_label}")
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
     plt.show()
     plt.close(fig)
 
@@ -194,11 +196,13 @@ def predict_single_image(
         idx_to_class=idx_to_class,
         predicted_idx=predicted_idx,
     )
+    predicted_label = format_disease_label(idx_to_class[predicted_idx])
 
     original_img = read_image_rgb(image_path)
     show_images(
         original_img=original_img,
         transformed_img=transformed_img,
+        predicted_label=predicted_label,
     )
     return 0
 

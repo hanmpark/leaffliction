@@ -135,7 +135,7 @@ python3 src/classification/predict.py artifacts/model ./images --max=100
 4. If `<input_path>` is an image:
    - recomputes features using saved `feature_config`
    - runs `estimator.predict(...)`
-   - prints predicted class and displays original + resized image
+   - prints predicted class and displays original + resized image with predicted class in the same figure
 5. If `<input_path>` is a directory:
    - recursively discovers images up to 5 directory levels deep
    - shuffles all discovered images, samples unique images once (`--max` optional)
