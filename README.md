@@ -39,7 +39,7 @@ pip install -r requirements.txt
 ### 2) Analyze dataset distribution
 
 ```bash
-python3 src/analysis/Distribution.py <dataset_dir> --out charts
+python3 src/analysis/Distribution.py <dataset_dir>
 ```
 
 ### 3) Augment or balance data

@@ -2,7 +2,7 @@
 """Generate per-plant class distribution charts from image folders.
 
 Usage:
-  python src/analysis/Distribution.py <input_dir> [--out charts] [--no-show]
+  python src/analysis/Distribution.py <input_dir>
 
 Supported layouts:
 - Two levels: input_dir/<plant>/<class>/*.jpg
@@ -35,7 +35,7 @@ def has_images(directory: Path) -> bool:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Analyze a dataset directory and produce "
+            "Analyze a dataset directory and display "
             "pie/bar charts for each plant "
             "type."
         )
@@ -49,26 +49,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "of class directories."
         ),
     )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path("charts"),
-        help="Output directory for generated charts (default: charts).",
-    )
-    parser.add_argument(
-        "--no-show",
-        action="store_true",
-        help="Do not display charts (save only).",
-    )
     return parser.parse_args(argv)
 
 
 def get_subdirs(path: Path) -> list[Path]:
     return sorted([p for p in path.iterdir() if p.is_dir()])
-
-
-def safe_name(name: str) -> str:
-    return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name)
 
 
 def infer_plant_from_class_name(class_name: str, fallback: str) -> str:
@@ -99,8 +84,6 @@ def input_looks_like_single_plant(
 def build_charts_for_plant(
     plant_name: str,
     class_dirs: list[Path],
-    out_dir: Path,
-    no_show: bool,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -115,44 +98,38 @@ def build_charts_for_plant(
         print(f"[warn] No images found under {plant_name}", file=sys.stderr)
         return
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    base = safe_name(plant_name)
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    pie_ax, bar_ax = axes
 
-    figures = []
-
-    # Pie chart
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.pie(
+    # Pie chart on the left.
+    pie_ax.pie(
         counts,
         labels=labels,
         autopct=lambda pct: f"{pct:.1f}%",
         startangle=90,
     )
-    ax.set_title(f"{plant_name} - Class Distribution (Pie)")
-    pie_path = out_dir / f"{base}_pie.png"
+    pie_ax.set_title(f"{plant_name} - Class Distribution (Pie)")
+
+    # Bar chart on the right.
+    bar_ax.bar(labels, counts)
+    bar_ax.set_title(f"{plant_name} - Class Distribution (Bar)")
+    bar_ax.set_xlabel("Class")
+    bar_ax.set_ylabel("Image Count")
+    bar_ax.set_ylim(0, max(counts) * 1.1)
+    bar_ax.tick_params(axis="x", rotation=30)
     fig.tight_layout()
-    fig.savefig(pie_path, dpi=150)
-    figures.append(fig)
 
-    # Bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(labels, counts)
-    ax.set_title(f"{plant_name} - Class Distribution (Bar)")
-    ax.set_xlabel("Class")
-    ax.set_ylabel("Image Count")
-    ax.set_ylim(0, max(counts) * 1.1)
-    fig.tight_layout()
-    bar_path = out_dir / f"{base}_bar.png"
-    fig.savefig(bar_path, dpi=150)
-    figures.append(fig)
-
-    if not no_show and plt.get_backend().lower() != "agg":
-        plt.show()
-
-    for fig in figures:
+    if plt.get_backend().lower() == "agg":
+        print(
+            "[warn] Matplotlib is using a non-interactive backend; "
+            "cannot display charts.",
+            file=sys.stderr,
+        )
         plt.close(fig)
-
-    print(f"[ok] {plant_name}: saved {pie_path} and {bar_path}")
+    else:
+        plt.show()
+        plt.close(fig)
+        print(f"[ok] {plant_name}: displayed pie and bar charts")
 
 
 def group_classes_by_plant(
@@ -201,10 +178,6 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     dataset_dir: Path = args.dataset_dir
 
-    import matplotlib
-
-    matplotlib.use("Agg")
-
     if not dataset_dir.exists() or not dataset_dir.is_dir():
         print(
             f"[error] Dataset directory not found: {dataset_dir}",
@@ -230,7 +203,7 @@ def main(argv: list[str]) -> int:
 
     for plant_name in sorted(plant_to_classes):
         class_dirs = plant_to_classes[plant_name]
-        build_charts_for_plant(plant_name, class_dirs, args.out, args.no_show)
+        build_charts_for_plant(plant_name, class_dirs)
 
     return 0
 
