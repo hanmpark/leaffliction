@@ -50,8 +50,8 @@ python3 src/classification/train.py <dataset_dir> [--output=<path>] [--generate-
 5. If class imbalance exceeds `+/- 6`, asks user whether to balance in-place.
    - Non-interactive override: `--auto-balance=true|false`
 6. Optional in-place balancing uses:
-   - `src/augmentation/balance_dataset.py --in-place`
-   - `src/augmentation/Augmentation.py`
+   - `src/augmentation/balance_dataset.py --in-place --augmentation-no-show`
+   - `src/augmentation/Augmentation.py --mute-show`
 7. Detects split folders in working dataset:
    - `<dataset_dir>/training_data`
    - `<dataset_dir>/validation_data`

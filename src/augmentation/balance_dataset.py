@@ -95,10 +95,16 @@ def has_missing_aug_outputs(original: Path) -> bool:
     return any(not p.exists() for p in expected_output_paths(original))
 
 
-def run_aug(aug_script: Path, image_path: Path) -> None:
+def run_aug(
+    aug_script: Path,
+    image_path: Path,
+    mute_show: bool = False,
+) -> None:
     """Run augmentation script on the given image."""
     if aug_script.suffix.lower() == ".py":
         cmd = [sys.executable, str(aug_script), str(image_path), "--quiet"]
+        if mute_show:
+            cmd.append("--mute-show")
     else:
         cmd = [str(aug_script), str(image_path)]
     subprocess.run(cmd, check=True)
@@ -195,6 +201,14 @@ def main(argv: List[str] | None = None) -> int:
         "--augmentation-script",
         required=True,
         help="Path to augmentation script.",
+    )
+    parser.add_argument(
+        "--augmentation-no-show",
+        action="store_true",
+        help=(
+            "Pass --mute-show to the augmentation script to suppress "
+            "preview windows."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -316,7 +330,11 @@ def main(argv: List[str] | None = None) -> int:
             chosen = rng.choice(eligible)
             before = count_images(class_dir)
             try:
-                run_aug(aug_script, chosen)
+                run_aug(
+                    aug_script,
+                    chosen,
+                    mute_show=args.augmentation_no_show,
+                )
             except subprocess.CalledProcessError as exc:
                 print(
                     (

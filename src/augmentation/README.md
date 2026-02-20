@@ -30,6 +30,7 @@ The output names use this pattern:
 - `<name>_Distortion.<ext>`
 
 It only processes original images and skips files that already end with known augmentation suffixes.
+After saving, it also shows one preview window per processed image containing the original plus all generated variants.
 
 Supported image formats:
 
@@ -60,6 +61,7 @@ python3 src/augmentation/Augmentation.py dataset
 ```
 
 The script writes augmented images next to the originals.
+Use `--no-show` (or `--mute-show`) to disable preview windows (useful for batch/headless runs).
 
 ## 2) `balance_dataset.py`
 
@@ -93,6 +95,7 @@ Arguments:
 - `--src`: source dataset directory.
 - `--out`: output directory (default: `augmented_directory`).
 - `--augmentation-script`: path to augmentation script to execute.
+- `--augmentation-no-show`: pass `--mute-show` to augmentation script.
 
 ## Notes
 

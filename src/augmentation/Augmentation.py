@@ -31,6 +31,50 @@ def save(img, path, suffix):
     cv2.imwrite(str(out), img)
 
 
+def display_preview(
+    path: Path,
+    original,
+    augmented: list[tuple[str, np.ndarray]],
+) -> None:
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print(
+            "[warn] matplotlib is not installed; "
+            "skipping augmentation preview."
+        )
+        return
+
+    if plt.get_backend().lower() == "agg":
+        print(
+            "[warn] Matplotlib is using a non-interactive backend; "
+            "skipping augmentation preview."
+        )
+        return
+
+    tiles = [("Original", original)] + augmented
+    cols = 4
+    rows = int(np.ceil(len(tiles) / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3.5 * rows))
+    axes_flat = np.atleast_1d(axes).ravel()
+
+    for ax, (name, image) in zip(axes_flat, tiles):
+        if image.ndim == 2:
+            ax.imshow(image, cmap="gray")
+        else:
+            ax.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        ax.set_title(name)
+        ax.axis("off")
+
+    for ax in axes_flat[len(tiles):]:
+        ax.axis("off")
+
+    fig.suptitle(path.name)
+    fig.tight_layout()
+    plt.show()
+    plt.close(fig)
+
+
 def flip(img):
     return cv2.flip(img, 1)
 
@@ -127,18 +171,25 @@ def distortion(img, k1=-0.2):
     )
 
 
-def augment_image(path: Path) -> bool:
+def augment_image(path: Path, show_preview: bool) -> bool:
     img = cv2.imread(str(path))
     if img is None:
         print(f"Error: cannot load image '{path}'")
         return False
 
-    save(flip(img), path, "Flip")
-    save(rotate(img), path, "Rotate")
-    save(skew(img), path, "Skew")
-    save(shear(img), path, "Shear")
-    save(crop(img), path, "Crop")
-    save(distortion(img), path, "Distortion")
+    augmented = [
+        ("Flip", flip(img)),
+        ("Rotate", rotate(img)),
+        ("Skew", skew(img)),
+        ("Shear", shear(img)),
+        ("Crop", crop(img)),
+        ("Distortion", distortion(img)),
+    ]
+    for suffix, aug_img in augmented:
+        save(aug_img, path, suffix)
+
+    if show_preview:
+        display_preview(path, img, augmented)
     return True
 
 
@@ -212,6 +263,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Suppress success logs.",
     )
+    parser.add_argument(
+        "--no-show",
+        "--mute-show",
+        dest="no_show",
+        action="store_true",
+        help="Do not display augmentation preview window.",
+    )
     return parser.parse_args(argv)
 
 
@@ -232,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     for image_path in images:
-        if not augment_image(image_path):
+        if not augment_image(image_path, show_preview=not args.no_show):
             return 1
 
     if not args.quiet:

@@ -445,6 +445,7 @@ def balance_dataset_in_place(dataset_dir: Path) -> None:
         "--augmentation-script",
         str(augment_script),
         "--in-place",
+        "--augmentation-no-show",
     ]
     print("[info] Balancing dataset in-place...")
     try:
